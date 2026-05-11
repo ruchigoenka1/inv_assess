@@ -101,6 +101,10 @@ data = []
 
 for day in range(num_days):
 
+    # Create lists to track actual cash movement dates
+    supplier_payments = []  # Tracks (Day_of_Payment, Amount)
+    customer_receipts = []  # Tracks (Day_of_Receipt, Amount)
+
     shipment_received = 0
 
     for order in pipeline_orders.copy():
@@ -114,6 +118,8 @@ for day in range(num_days):
     demand_today = demand[day]
     inventory -= demand_today
 
+    customer_receipts.append((day + buyer_credit, demand_today * unit_value))
+
     if inventory < 0:
         inventory = 0
 
@@ -126,10 +132,13 @@ for day in range(num_days):
     if inventory_position < reorder_point:
         new_order = order_qty
         pipeline_orders.append((day + lead_time, order_qty))
+        supplier_payments.append((day + supplier_credit, order_qty * unit_value))
 
     closing = inventory
 
     closing_with_pipeline = closing + sum(qty for arrival, qty in pipeline_orders)
+
+    
 
     data.append([
         dates[day],
