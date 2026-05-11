@@ -431,6 +431,49 @@ fig_waterfall = go.Figure(go.Waterfall(
 
 st.plotly_chart(fig_waterfall,use_container_width=True)
 
+
+# Cas Flow Inventory Lifestyles
+st.subheader("Cash Flow & Inventory Lifecycle")
+
+# We will visualize the lifecycle of a SINGLE typical order cycle 
+# to show how the colors interact based on your inputs.
+lifecycle_data = [
+    dict(Task="1. Physical Flow", Start=0, End=lead_time, Phase="In-Transit (Orange)", Color="orange"),
+    dict(Task="1. Physical Flow", Start=lead_time, End=lead_time + avg_age_inventory, Phase="In-Store (Green)", Color="green"),
+    dict(Task="2. Financial Flow", Start=lead_time + avg_age_inventory, End=lead_time + avg_age_inventory + buyer_credit, Phase="Receivable (Blue)", Color="blue")
+]
+
+df_life = pd.DataFrame(lifecycle_data)
+
+fig_life = px.timeline(
+    df_life, 
+    x_start="Start", 
+    x_end="End", 
+    y="Task", 
+    color="Phase",
+    color_discrete_map={
+        "In-Transit (Orange)": "orange",
+        "In-Store (Green)": "green",
+        "Receivable (Blue)": "royalblue"
+    }
+)
+
+# Convert timeline to linear "Days" axis
+fig_life.layout.xaxis.type = 'linear'
+for i in range(len(fig_life.data)):
+    fig_life.data[i].x = [df_life.iloc[i]['End'] - df_life.iloc[i]['Start']]
+    fig_life.data[i].base = [df_life.iloc[i]['Start']]
+
+# Add a marker for when the cash actually leaves the bank
+fig_life.add_vline(x=supplier_credit, line_dash="dash", line_color="red", 
+                  annotation_text=f"Supplier Payment (Day {supplier_credit})")
+
+st.plotly_chart(fig_life, use_container_width=True)
+
+# Calculation for the "Cash Gap"
+cash_gap = (lead_time + avg_age_inventory + buyer_credit) - supplier_credit
+st.info(f"**Cash Conversion Cycle:** Your cash is blocked for approximately **{round(cash_gap, 1)} days**.")
+
 # ------------------------------------------------
 # Data Table
 # ------------------------------------------------
