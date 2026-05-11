@@ -432,48 +432,71 @@ fig_waterfall = go.Figure(go.Waterfall(
 st.plotly_chart(fig_waterfall,use_container_width=True)
 
 
-# Cas Flow Inventory Lifestyles
-st.subheader("Cash Flow & Inventory Lifecycle")
+# ------------------------------------------------
+# NEW: Cash Flow & Movement Visualization
+# ------------------------------------------------
+st.header("🕒 Cash Flow & Lifecycle Analysis")
 
-# We will visualize the lifecycle of a SINGLE typical order cycle 
-# to show how the colors interact based on your inputs.
-lifecycle_data = [
-    dict(Task="1. Physical Flow", Start=0, End=lead_time, Phase="In-Transit (Orange)", Color="orange"),
-    dict(Task="1. Physical Flow", Start=lead_time, End=lead_time + avg_age_inventory, Phase="In-Store (Green)", Color="green"),
-    dict(Task="2. Financial Flow", Start=lead_time + avg_age_inventory, End=lead_time + avg_age_inventory + buyer_credit, Phase="Receivable (Blue)", Color="blue")
-]
+# Re-calculating local variables to ensure no NameErrors
+calc_lead_time = lead_time
+calc_stock_days = df["Closing Balance"].mean() / df["Demand"].mean() if df["Demand"].mean() > 0 else 0
+calc_buyer_credit = buyer_credit
+calc_supplier_credit = supplier_credit
 
-df_life = pd.DataFrame(lifecycle_data)
+# Define the lifecycle phases
+# Phase 1: Transit (Orange) - from Day 0 to Lead Time
+# Phase 2: In-Store (Green) - from Lead Time to when it's sold
+# Phase 3: Receivable (Blue) - from Sale to Cash Receipt
+lifecycle_df = pd.DataFrame([
+    dict(Task="Physical & Financial Flow", Start=0, End=calc_lead_time, Phase="1. In-Transit", Color="Orange"),
+    dict(Task="Physical & Financial Flow", Start=calc_lead_time, End=calc_lead_time + calc_stock_days, Phase="2. In-Store", Color="Green"),
+    dict(Task="Physical & Financial Flow", Start=calc_lead_time + calc_stock_days, End=calc_lead_time + calc_stock_days + calc_buyer_credit, Phase="3. Receivable", Color="Blue")
+])
 
-fig_life = px.timeline(
-    df_life, 
+fig_cash_move = px.timeline(
+    lifecycle_df, 
     x_start="Start", 
     x_end="End", 
     y="Task", 
     color="Phase",
     color_discrete_map={
-        "In-Transit (Orange)": "orange",
-        "In-Store (Green)": "green",
-        "Receivable (Blue)": "royalblue"
-    }
+        "1. In-Transit": "#FFA500", # Orange
+        "2. In-Store": "#2E8B57",    # Green
+        "3. Receivable": "#1E90FF"   # Blue
+    },
+    title="Inventory Lifecycle: Where is the value?"
 )
 
-# Convert timeline to linear "Days" axis
-fig_life.layout.xaxis.type = 'linear'
-for i in range(len(fig_life.data)):
-    fig_life.data[i].x = [df_life.iloc[i]['End'] - df_life.iloc[i]['Start']]
-    fig_life.data[i].base = [df_life.iloc[i]['Start']]
+# Force the chart to use a numeric 'Day' axis instead of dates
+fig_cash_move.layout.xaxis.type = 'linear'
+for i in range(len(fig_cash_move.data)):
+    fig_cash_move.data[i].x = [lifecycle_df.iloc[i]['End'] - lifecycle_df.iloc[i]['Start']]
+    fig_cash_move.data[i].base = [lifecycle_df.iloc[i]['Start']]
 
-# Add a marker for when the cash actually leaves the bank
-fig_life.add_vline(x=supplier_credit, line_dash="dash", line_color="red", 
-                  annotation_text=f"Supplier Payment (Day {supplier_credit})")
+# Add the "Cash Out" line (Supplier Payment)
+fig_cash_move.add_vline(
+    x=calc_supplier_credit, 
+    line_dash="dash", 
+    line_color="red", 
+    annotation_text=f"PAYMENT TO SUPPLIER (Day {calc_supplier_credit})"
+)
 
-st.plotly_chart(fig_life, use_container_width=True)
+# Add the "Cash In" line (Final Receipt)
+total_cycle = calc_lead_time + calc_stock_days + calc_buyer_credit
+fig_cash_move.add_vline(
+    x=total_cycle, 
+    line_dash="dot", 
+    line_color="gold", 
+    annotation_text=f"CASH FROM CUSTOMER (Day {round(total_cycle, 1)})",
+    annotation_position="bottom right"
+)
+
+st.plotly_chart(fig_cash_move, use_container_width=True)
 
 # Calculation for the "Cash Gap"
-cash_gap = (lead_time + avg_age_inventory + buyer_credit) - supplier_credit
-st.info(f"**Cash Conversion Cycle:** Your cash is blocked for approximately **{round(cash_gap, 1)} days**.")
-
+cash_gap = total_cycle - calc_supplier_credit
+st.metric("Total Cash Blocked Days", f"{round(cash_gap, 1)} Days", 
+          help="Days between paying supplier and receiving customer cash.")
 # ------------------------------------------------
 # Data Table
 # ------------------------------------------------
